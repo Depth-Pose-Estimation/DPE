@@ -15,6 +15,7 @@ class DepthPredictor(torch.nn.Module):
         self.uconv4 = torch.nn.ConvTranspose2d(in_channels =  64, out_channels = 1, kernel_size = 2, stride = 2)#, padding = 1)
 
         self.act1   = torch.nn.ReLU()
+        self.act2   = torch.nn.Sigmoid()
         
     def init_weights(self):
         for m in self.modules():
@@ -51,7 +52,7 @@ class DepthPredictor(torch.nn.Module):
         l7 = self.act1(l7)
 
         l8 = self.uconv4(l7)
-        l8 = self.act1(l8)
+        l8 = self.act2(l8)
 
         return l8
 
