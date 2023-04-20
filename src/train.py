@@ -21,9 +21,12 @@ class Trainer:
         self.scheduler = scheduler
     
     def loss(self, model_out, depth_imgs_gt):
-        pass
+        loss_fn = torch.nn.MSELoss()
+        loss_val = loss_fn(model_out, depth_imgs_gt)
+        return loss_val
     
     def train(self):
+        self.model.to(self.device)
         for i in range(self.num_epochs):
 
             for rgb_imgs, depth_imgs_gt in self.train_dataloader:
@@ -52,8 +55,8 @@ class Trainer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset directory
-    parser.add_argument('--data-dir', required=True, type=str, help='path to dataset directory')
-    parser.add_argument('--batch-size', required=True, type=str, help='batch size')
+    parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
+    parser.add_argument('--batch-size', type=str, help='batch size', default=32)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -61,14 +64,15 @@ if __name__ == "__main__":
 
     rgb_txt = dataset_dir + "/rgb.txt"
     depth_txt = dataset_dir + "/depth.txt"
-    rgb_dir = dataset_dir + "/rgb/"
-    depth_dir = dataset_dir + "/depth/"
+    rgb_dir = dataset_dir 
+    depth_dir = dataset_dir
 
     # load dataset
     dataset = DepthDataset(rgb_img_txt=rgb_txt, depth_img_txt=depth_txt, rgb_img_dir=rgb_dir, depth_img_dir=depth_dir)
     # train-test split
-    test_split = 0.2
-    lengths = [1 - test_split, test_split] # [train ratio, test ratio]
+    dataset_len = dataset.__len__()
+    test_split = int(0.2 * dataset_len)
+    lengths = [(dataset_len - test_split), test_split ] # [train ratio, test ratio]
     train_dataset, test_dataset = random_split(dataset, lengths)
 
     train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -76,4 +80,4 @@ if __name__ == "__main__":
 
     model = DepthPredictor()
     trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size)
-    # trainer.train()
+    trainer.train()
