@@ -22,15 +22,20 @@ class DepthDataset(torch.utils.data.Dataset):
         assert self.rgb_imgs.shape[0] == self.depth_imgs.shape[0]
 
     def __len__(self):
-        return self.depth_imgs.shape
+        return self.depth_imgs.shape[0]
     
     def __getitem__(self, idx):
         rgb_img_path = os.path.join(self.rgb_img_dir, self.rgb_imgs['filename'].iloc[idx])
         depth_img_path = os.path.join(self.depth_img_dir, self.depth_imgs['filename'].iloc[idx])
 
         # TODO : Augment data
-        rgb_img = torch.Tensor(np.array(Image.open(rgb_img_path)))
-        depth_img = torch.Tensor(np.array(Image.open(depth_img_path)))
+        transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+        rgb_img = np.array(Image.open(rgb_img_path))
+        depth_img = np.array(Image.open(depth_img_path)).astype(np.float32)
+        depth_img /= np.max(depth_img)
+
+        rgb_img = transform(rgb_img)
+        depth_img = transform(depth_img)
 
         return rgb_img, depth_img
     
