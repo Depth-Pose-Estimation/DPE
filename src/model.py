@@ -52,7 +52,7 @@ class DepthPredictor(torch.nn.Module):
         l7 = self.act1(l7)
 
         l8 = self.uconv4(l7)
-        l8 = self.act2(l8)
+        # l8 = self.act2(l8)
 
         return l8
 
