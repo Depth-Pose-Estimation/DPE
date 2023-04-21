@@ -133,7 +133,7 @@ class DepthPosePredictor(torch.nn.Module):
 
 ############################# TEST CODE ###########################################
 # https://thanos.charisoudis.gr/blog/a-simple-conv2d-dimensions-calculator-logger
-x = torch.rand(12, 1, 640, 320)
-model = DepthPosePredictor()
-depth, pose = model(x, x)
-print(f"depth : {depth.shape}, pose : {pose.shape}")
+# x = torch.rand(12, 1, 640, 320)
+# model = DepthPosePredictor()
+# depth, pose = model(x, x)
+# print(f"depth : {depth.shape}, pose : {pose.shape}")
