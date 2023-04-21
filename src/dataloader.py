@@ -1,5 +1,5 @@
 import torch 
-from PIL import Image
+from PIL import Image, ImageOps
 import torchvision
 import pandas as pd
 import numpy as np
@@ -22,22 +22,25 @@ class DepthDataset(torch.utils.data.Dataset):
         assert self.rgb_imgs.shape[0] == self.depth_imgs.shape[0]
 
     def __len__(self):
-        return self.depth_imgs.shape[0]
+        return self.depth_imgs.shape[0] - 1
     
     def __getitem__(self, idx):
-        rgb_img_path = os.path.join(self.rgb_img_dir, self.rgb_imgs['filename'].iloc[idx])
+        rgb_img_t_path = os.path.join(self.rgb_img_dir, self.rgb_imgs['filename'].iloc[idx])
+        rgb_img_t1_path = os.path.join(self.rgb_img_dir, self.rgb_imgs['filename'].iloc[idx + 1])
         depth_img_path = os.path.join(self.depth_img_dir, self.depth_imgs['filename'].iloc[idx])
 
         # TODO : Augment data
         transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-        rgb_img = np.array(Image.open(rgb_img_path))
+        rgb_img_t = ImageOps.grayscale(Image.open(rgb_img_t_path))
+        rgb_img_t1 = ImageOps.grayscale(Image.open(rgb_img_t1_path))
         depth_img = np.array(Image.open(depth_img_path)).astype(np.float32)
         depth_img /= np.max(depth_img)
 
-        rgb_img = transform(rgb_img)
+        rgb_img_t = transform(rgb_img_t)
+        rgb_img_t1 = transform(rgb_img_t1)
         depth_img = transform(depth_img)
 
-        return rgb_img, depth_img
+        return rgb_img_t, rgb_img_t1, depth_img
     
 ###################### TESTER CODE ##############################################
 
@@ -46,7 +49,8 @@ class DepthDataset(torch.utils.data.Dataset):
 #                        rgb_img_dir= "/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360",
 #                        depth_img_dir="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
 
-# for i, (rgb, depth) in enumerate(dataset):
-#     print(rgb.shape)
+# for i, (rgb_t, rgb_t1, depth) in enumerate(dataset):
+#     print(rgb_t.shape)
+#     print(rgb_t1.shape)
 #     print(depth.shape)
 #     break
