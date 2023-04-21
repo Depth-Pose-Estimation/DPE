@@ -1,5 +1,6 @@
 import torch
 import torchvision
+import torchgeometry as tgm
 import argparse
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
@@ -30,6 +31,11 @@ class Trainer:
         loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
         return loss_val
     
+    def depth_smoothness_loss(self, depth_img, rgb_img):
+        smooth = tgm.losses.DepthSmoothnessLoss()
+        loss = smooth(depth_img, rgb_img)
+        return loss
+    
     def train(self):
 
 
@@ -39,9 +45,11 @@ class Trainer:
             for rgb_imgs, depth_imgs_gt in self.train_dataloader:
                 rgb_imgs = rgb_imgs.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                model_out = self.model(rgb_imgs)
+                depth_out, pose_out = self.model(rgb_imgs)
 
-                loss = self.loss(model_out, depth_imgs_gt)
+                mse_loss = self.loss(depth_out, depth_imgs_gt)
+                depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs)
+                loss = mse_loss + depth_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
@@ -63,9 +71,9 @@ class Trainer:
             for rgb_imgs, depth_imgs_gt in self.test_dataloader:
                 rgb_imgs = rgb_imgs.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                model_out = self.model(rgb_imgs)
+                depth_out, pose_out = self.model(rgb_imgs)
 
-                loss = self.loss(model_out, depth_imgs_gt)
+                loss = self.loss(depth_out, depth_imgs_gt)
                 val_loss += loss.item()
 
             print(f"[VAL LOSS] {val_loss}")
