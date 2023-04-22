@@ -9,9 +9,11 @@ from model import DepthPosePredictor
 import matplotlib.pyplot as plt
 import numpy as np
 
+# torch.manual_seed(6)
+
 class Trainer:
-    def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 0.0006, batch_size = 100, 
-                    num_epochs = 20, scheduler = None, device = 'cuda'):
+    def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 1e-3, batch_size = 100, 
+                    num_epochs = 5, scheduler = None, device = 'cuda'):
       
         self.model = model
         self.train_dataloader = train_dataloader
@@ -47,11 +49,11 @@ class Trainer:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_t1 = rgb_imgs_t1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1, xt = rgb_imgs_t)
+                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1) #, xt = rgb_imgs_t)
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                loss = mse_loss + depth_loss
+                loss = mse_loss #+ depth_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
@@ -74,14 +76,14 @@ class Trainer:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_t1 = rgb_imgs_t1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1, xt = rgb_imgs_t)
+                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1)#, xt = rgb_imgs_t)
 
                 loss = self.loss(depth_out, depth_imgs_gt)
                 val_loss += loss.item()
 
             print(f"[VAL LOSS] {val_loss}")
 
-        images, depth = iter(self.test_dataloader).next()
+        images, images_t1, depth = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()
@@ -124,7 +126,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset directory
     parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
-    parser.add_argument('--batch-size', type=str, help='batch size', default=1)
+    parser.add_argument('--batch-size', type=str, help='batch size', default=3)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -143,8 +145,8 @@ if __name__ == "__main__":
     lengths = [(dataset_len - test_split), test_split ] # [train ratio, test ratio]
     train_dataset, test_dataset = random_split(dataset, lengths)
 
-    train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
-    test_dataloader =  DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
+    train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
+    test_dataloader =  DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
 
     model = DepthPosePredictor()
     trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size)

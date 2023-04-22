@@ -49,8 +49,10 @@ class DepthDataset(torch.utils.data.Dataset):
 #                        rgb_img_dir= "/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360",
 #                        depth_img_dir="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
 
+# print(len(dataset))
 # for i, (rgb_t, rgb_t1, depth) in enumerate(dataset):
 #     print(rgb_t.shape)
 #     print(rgb_t1.shape)
 #     print(depth.shape)
 #     break
+    # print(i)
