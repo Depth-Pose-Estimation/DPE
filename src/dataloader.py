@@ -19,6 +19,9 @@ class DepthDataset(torch.utils.data.Dataset):
         self.rgb_imgs = self.rgb_imgs.loc[self.valid_pair_mask[0],:]
         self.depth_imgs = self.depth_imgs.loc[self.valid_pair_mask[0],:]
 
+        # RGB-D SLAM has scaled depth by 5000
+        self.depth_scale = 5000
+
         assert self.rgb_imgs.shape[0] == self.depth_imgs.shape[0]
 
     def __len__(self):
@@ -32,7 +35,9 @@ class DepthDataset(torch.utils.data.Dataset):
         transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
         rgb_img = np.array(Image.open(rgb_img_path))
         depth_img = np.array(Image.open(depth_img_path)).astype(np.float32)
-        depth_img /= np.max(depth_img)
+        #TODO - hardcoded for now. RGB-D SLAM has scaled depth by 5000 (depth_scale). Don't normalize depth
+        depth_img /= self.depth_scale
+        # depth_img /= np.max(depth_img)
 
         rgb_img = transform(rgb_img)
         depth_img = transform(depth_img)

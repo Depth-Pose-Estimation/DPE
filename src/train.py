@@ -23,34 +23,49 @@ class Trainer:
 
         self.optim = torch.optim.Adam(self.model.parameters(), self.learning_rate)
         self.scheduler = scheduler
+
+        fx = 520.9  # focal length x
+        fy = 521.0  # focal length y
+        cx = 325.1  # optical center x
+        cy = 249.7  # optical center y
+        self.intrinsic_mat = torch.tensor([[fx, 0, cx],
+                                           [0, fy, cy],
+                                           [0, 0, 1]], dtype=torch.float)
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
-        # loss_fn = torch.nn.CrossEntropyLoss()
         mask = (depth_imgs_gt != 0)
         loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
         return loss_val
     
+    def reproj_loss(self):
+        pass
+    
     def depth_smoothness_loss(self, depth_img, rgb_img):
-        smooth = tgm.losses.DepthSmoothnessLoss()
+        smooth = tgm.losses.InverseDepthSmoothnessLoss()
         loss = smooth(depth_img, rgb_img)
         return loss
     
     def train(self):
 
-
         self.model.to(self.device)
         for i in range(self.num_epochs):
             train_loss = 0
-            for rgb_imgs, depth_imgs_gt in self.train_dataloader:
-                rgb_imgs = rgb_imgs.to(self.device)
+            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt in self.train_dataloader:
+                # rgb_imgs_t - image at time t
+                # rgb_imgs_tPlus1 - image at time (t + 1)
+                # depth_imgs_gt - depth image ground truth at time t
+                rgb_imgs_t = rgb_imgs_t.to(self.device)
+                rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                depth_out, pose_out = self.model(rgb_imgs)
 
-                mse_loss = self.loss(depth_out, depth_imgs_gt)
-                depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs)
-                loss = mse_loss + depth_loss
-                
+                depth_out, pose_out = self.model(rgb_imgs_t, rgb_imgs_tPlus1)
+
+                # mse_loss = self.loss(depth_out, depth_imgs_gt)
+                depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
+                reproj_loss = self.reproj_loss()
+                loss = reproj_loss + depth_loss
+
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
