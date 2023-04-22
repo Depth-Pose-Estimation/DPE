@@ -8,6 +8,7 @@ from dataloader import DepthDataset
 from model import DepthPredictor
 import matplotlib.pyplot as plt
 import numpy as np
+from utils import *
 
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 0.0006, batch_size = 100, 
@@ -38,8 +39,10 @@ class Trainer:
         loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
         return loss_val
     
-    def reproj_loss(self):
-        pass
+    def reproj_loss(self, source_imgs, target_imgs, pose_out, depth_out):
+        warped_imgs, valid_pts = inverse_warp(source_imgs, pose_out, depth_out, self.intrinsic_mat)
+        reproj_loss = (target_imgs - warped_imgs) * valid_pts.unsqueeze(1).float()
+        return reproj_loss
     
     def depth_smoothness_loss(self, depth_img, rgb_img):
         smooth = tgm.losses.InverseDepthSmoothnessLoss()
