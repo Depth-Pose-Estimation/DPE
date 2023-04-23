@@ -24,7 +24,7 @@ def quat_to_rotMat(Q):
 def inverse_warp(imgs, pose, depth, intrinsics):
         '''
         imgs - (B x C x H x W)
-        pose - (B x 7) if rotation in quaternion
+        pose - (B x 12) - (R | t) flattened
         depth - (B x 1 x H x W)
         intrinsics - (3 x 3)
         '''
@@ -36,11 +36,12 @@ def inverse_warp(imgs, pose, depth, intrinsics):
         # homogeneous pixel indices
         indices = torch.stack((x_inds, y_inds, torch.ones_like(x_inds))).unsqueeze(0) # (1 x 3 x H x W)
 
-        # convert to rot mat and get transformation matrix
-        translation, quat = pose[:, :3], pose[:, 3:]
-        translation = translation.unsqueeze(-1) # (B x 3 x 1)
-        rot_mat = quat_to_rotMat(quat)
-        transform_mat = torch.cat((rot_mat, translation), dim=2) # (B x 3 x 4)
+        # # convert to rot mat and get transformation matrix
+        # translation, quat = pose[:, :3], pose[:, 3:]
+        # translation = translation.unsqueeze(-1) # (B x 3 x 1)
+        # rot_mat = quat_to_rotMat(quat)
+        # transform_mat = torch.cat((rot_mat, translation), dim=2) # (B x 3 x 4)
+        transform_mat = pose.reshape(b, 3, 4) # (B x 3 x 4)
 
         # convert to 3D coords
         intrinsics_inv = torch.linalg.inv(intrinsics).unsqueeze(0) # (1 x 3 x 3)
