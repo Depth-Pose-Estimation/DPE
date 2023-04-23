@@ -42,6 +42,7 @@ class Trainer:
     def reproj_loss(self, source_imgs, target_imgs, pose_out, depth_out):
         warped_imgs, valid_pts = inverse_warp(source_imgs, pose_out, depth_out, self.intrinsic_mat)
         reproj_loss = (target_imgs - warped_imgs) * valid_pts.unsqueeze(1).float()
+        reproj_loss = reproj_loss.abs().mean()
         return reproj_loss
     
     def depth_smoothness_loss(self, depth_img, rgb_img):
@@ -60,9 +61,10 @@ class Trainer:
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1, xt = rgb_imgs_t)
 
-                mse_loss = self.loss(depth_out, depth_imgs_gt)
+                # mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                loss = mse_loss + depth_loss
+                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_t1, pose_out=pose_out, depth_out=depth_out)
+                loss = reproj_loss + depth_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
