@@ -129,11 +129,33 @@ class DepthPosePredictor(torch.nn.Module):
             p4 = self.pose_mp_pose(p4)                                            # B x 6 x 1 x 1
             p4 = p4.view(-1, 6)                                                   # B x 6
 
-        return d4, p4
+            return d4, p4
 
+        else:
+            return d4
+        
 ############################# TEST CODE ###########################################
 # https://thanos.charisoudis.gr/blog/a-simple-conv2d-dimensions-calculator-logger
 # x = torch.rand(12, 1, 640, 320)
 # model = DepthPosePredictor()
 # depth, pose = model(x, x)
 # print(f"depth : {depth.shape}, pose : {pose.shape}")
+
+# x = torch.rand(12, 1, 640, 320)
+# model = DepthPosePredictor()
+
+# from torchviz import make_dot
+
+# from torch.utils.tensorboard import SummaryWriter
+# writer = SummaryWriter("torchlogs/")
+# writer.add_graph(model, x)
+# writer.close()
+
+# y,p = model(x, x)
+# dot = make_dot(y.mean(), params=dict(model.named_parameters()))
+# dot.format = 'png'
+# dot.render('depth')
+
+# dot = make_dot(p.mean(), params=dict(model.named_parameters()))
+# dot.format = 'png'
+# dot.render('pose')
