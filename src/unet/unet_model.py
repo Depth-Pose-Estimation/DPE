@@ -1,6 +1,6 @@
 """ Full assembly of the parts to form the complete network """
 
-from unet_parts import *
+from .unet_parts import *
 
 
 class UNet(nn.Module):
@@ -27,7 +27,7 @@ class UNet(nn.Module):
         self.up2_pose = (Up(512, 256 // factor, bilinear))
         self.up3_pose = (Up(256, 128 // factor, bilinear))
         self.up4_pose = (Up(128, 64, bilinear))
-        self.outc_pose = (OutConv(64, 12))
+        self.outc_pose = (OutConv(64, 7))
         self.mp = torch.nn.AdaptiveAvgPool2d(1)
 
         self.act1 = torch.nn.ReLU()

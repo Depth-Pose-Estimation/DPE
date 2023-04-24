@@ -4,7 +4,7 @@ import torchgeometry as tgm
 import argparse
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
-from dataloader import DepthDataset, DepthDatasetKitti
+from dataloader import DepthDataset, DepthDatasetKitti, DepthPoseDatasetKitti
 from model import DepthPosePredictor
 from unet.unet_model import UNet
 import matplotlib.pyplot as plt
@@ -37,7 +37,7 @@ class Trainer:
         cy = 249.7  # optical center y
         self.intrinsic_mat = torch.tensor([[fx, 0, cx],
                                            [0, fy, cy],
-                                           [0, 0, 1]], dtype=torch.float)
+                                           [0, 0, 1]], dtype=torch.float, device=device)
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
@@ -85,33 +85,34 @@ class Trainer:
         self.model.to(self.device)
         for i in range(self.num_epochs):
             train_loss = 0
-            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt in self.train_dataloader:
+            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose in self.train_dataloader:
                 b, c, h, w = rgb_imgs_t.shape
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_t)
-                depth_out = model_out[:, :-12]
+                depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
-                pose_out = model_out[:, -12:]
+                pose_out = model_out[:, -7:]
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
                 reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
-                loss = reproj_loss + depth_loss + mse_loss
+                loss = reproj_loss #+ depth_loss + mse_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
                 train_loss += loss.item()
 
-            if i % self.val_every == 0:
-                self.eval(i)
 
             train_loss /= len(self.train_dataloader)
             
             print(f"EPOCH {i + 1} [TRAIN LOSS] {train_loss}")
             writer.add_scalar('Loss/train', train_loss, i)
+
+            if i % self.val_every == 0:
+                self.eval(i)
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -123,15 +124,15 @@ class Trainer:
         self.model.eval()
 
         with torch.no_grad():
-            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt in self.test_dataloader:
+            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt in self.test_dataloader:
                 b, c, h, w = rgb_imgs_t.shape
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
-                depth_out = model_out[:, :-12]
+                depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
-                pose_out = model_out[:, -12:]
+                pose_out = model_out[:, -7:]
 
                 loss = self.loss(depth_out, depth_imgs_gt)
                 reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
@@ -143,7 +144,7 @@ class Trainer:
 
             torch.save(model.state_dict(), "best.pth")
 
-        images, depth = iter(self.test_dataloader).next()
+        images, images_t, depth, pose = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()
@@ -192,8 +193,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset directory
     parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
-    parser.add_argument('--batch-size', type=int, help='batch size', default=10)
-    parser.add_argument('--epoch', type=int, help='epoch', default=200)
+    parser.add_argument('--batch-size', type=int, help='batch size', default=3)
+    parser.add_argument('--epoch', type=int, help='epoch', default=2)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -213,8 +214,8 @@ if __name__ == "__main__":
     # train_dataset, test_dataset = random_split(dataset, lengths)
 
 
-    train_dataset = DepthDatasetKitti(split="train", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
-    test_dataset = DepthDatasetKitti(split="val", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
+    train_dataset = DepthPoseDatasetKitti(split="train", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
+    test_dataset = DepthPoseDatasetKitti(split="val", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
     train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
     test_dataloader =  DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
 
