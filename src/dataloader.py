@@ -90,7 +90,69 @@ class DepthDatasetKitti(torch.utils.data.Dataset):
 
         return rgb_image_t, depth_image_t
 
+class DepthPoseDatasetKitti(torch.utils.data.Dataset):
+    def __init__(self, split = "train", data_dir = None):
+        super (DepthPoseDatasetKitti, self).__init__()
 
+        self.split_type = split
+        self.data_dir = data_dir
+
+        if self.split_type == "train":
+            self.txt_file = "train.txt"
+
+        elif self.split_type == "val":
+            self.txt_file = "val.txt"
+        
+        f = open(os.path.join(data_dir, self.txt_file))
+        self.folders = f
+        
+        self.all_files = []
+        self.all_poses = []
+        self.all_folders = []
+        self.num_files_idx = []
+        for folders in self.folders:
+            files_in_folders = os.listdir(os.path.join(data_dir, folders.strip("\n")))
+            self.num_files_idx.append(len(files_in_folders))
+            for f in files_in_folders:
+                if (".jpg") in f:
+                    self.all_files.append(os.path.join(folders.strip("\n"), f))
+                #TODO : Handle poses
+                if f == "poses.txt":
+                    p = open(os.path.join(data_dir, folders.strip("\n"), f))
+                    self.all_poses.extend(p.readlines())
+
+
+    def __len__(self):
+        return len(self.all_files) - 1
+    
+    def __getitem__(self, idx):
+
+        # Take care of indices that are the end of one folder
+        if idx in self.num_files_idx:
+            idx += 1
+        
+        rgb_image_t_path = os.path.join(self.data_dir, self.all_files[idx])
+        rgb_image_t1_path = os.path.join(self.data_dir, self.all_files[idx + 1])
+        depth_image_t_path = rgb_image_t_path.strip(".jpg") + "_depth_interp.npy"
+
+        rgb_image_t = ImageOps.grayscale(Image.open(rgb_image_t_path))
+        rgb_image_t1 = ImageOps.grayscale(Image.open(rgb_image_t1_path))
+        depth_image_t = np.load(depth_image_t_path).astype(np.float32)
+
+        pose = self.all_poses[idx + 1].split(" ")
+        pose[-1] = pose[-1].strip("\n")
+        pose = [float(x) for x in pose]
+        pose = np.array(pose)  # (12, )
+        pose = np.reshape(pose, (3, 4))
+
+        transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+
+        rgb_image_t = transform(rgb_image_t)
+        rgb_image_t1 = transform(rgb_image_t1)
+        depth_image_t = transform(depth_image_t)
+        pose = torch.tensor(pose)
+
+        return rgb_image_t, rgb_image_t1, depth_image_t, pose
     
 ###################### TESTER CODE ##############################################
 
@@ -114,5 +176,17 @@ class DepthDatasetKitti(torch.utils.data.Dataset):
 #     print(rgb_t.shape)
 #     # print(rgb_t1.shape)
 #     print(depth.shape)
+#     break
+#     print(i)
+
+
+# dataset = DepthPoseDatasetKitti(split="train", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
+
+# print(len(dataset))
+# for i, (rgb_t, rgb_t1,  depth, pose) in enumerate(dataset):
+#     print(rgb_t.shape)
+#     print(rgb_t1.shape)
+#     print(depth.shape)
+#     print(pose.shape)
 #     break
 #     print(i)
