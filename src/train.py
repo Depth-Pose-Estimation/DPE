@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from dataloader import DepthDataset, DepthDatasetKitti
 from model import DepthPosePredictor
+from unet.unet_model import UNet
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +14,7 @@ import numpy as np
 
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 1e-3, batch_size = 100, 
-                    num_epochs = 5, scheduler = None, device = 'cuda'):
+                    num_epochs = 1, scheduler = None, device = 'cuda'):
       
         self.model = model
         self.train_dataloader = train_dataloader
@@ -28,7 +29,7 @@ class Trainer:
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
-        loss_fn = torch.nn.CrossEntropyLoss()
+        # loss_fn = torch.nn.CrossEntropyLoss()
         loss_val = loss_fn(model_out, depth_imgs_gt)
 
         # mask = (depth_imgs_gt != 0)
@@ -55,7 +56,7 @@ class Trainer:
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                loss = mse_loss + depth_loss
+                loss = mse_loss #+ depth_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
@@ -74,18 +75,18 @@ class Trainer:
         self.model.eval()
 
         with torch.no_grad():
-            for rgb_imgs_t, rgb_imgs_t1, depth_imgs_gt in self.test_dataloader:
+            for rgb_imgs_t, depth_imgs_gt in self.test_dataloader:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
-                rgb_imgs_t1 = rgb_imgs_t1.to(self.device)
+                # rgb_imgs_t1 = rgb_imgs_t1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1)#, xt = rgb_imgs_t)
+                depth_out = self.model(rgb_imgs_t)#, xt = rgb_imgs_t)
 
                 loss = self.loss(depth_out, depth_imgs_gt)
                 val_loss += loss.item()
 
             print(f"[VAL LOSS] {val_loss}")
 
-        images, images_t1, depth = iter(self.test_dataloader).next()
+        images, depth = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()
@@ -107,6 +108,7 @@ class Trainer:
         plt.imsave("img.png", np.transpose(npimg, (1, 2, 0)))
 
         npdepth = depth.numpy()
+        npdepth /= np.max(npdepth)
         print(f"[INFO] Saving gt plot")
         plt.imsave("gt_depth.png", np.transpose(npdepth, (1, 2, 0)))
 
@@ -116,11 +118,13 @@ class Trainer:
         with torch.no_grad():
         
             images = images.to(self.device)
-            images, poses = model(images)
+            images = model(images)
             images = images.cpu()
+            # images /= torch.max(images)
             # images = self.to_img(images)
             np_imagegrid = torchvision.utils.make_grid(images[1:10], 10, 1).numpy()
             print(f"[INFO] Saving pred plot")
+            np_imagegrid /= np.max(np_imagegrid)
             plt.imsave("pred_depth.png", np.transpose(np_imagegrid, (1, 2, 0)))
             # plt.show()
 
@@ -128,7 +132,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset directory
     parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
-    parser.add_argument('--batch-size', type=int, help='batch size', default=6)
+    parser.add_argument('--batch-size', type=int, help='batch size', default=10)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -153,7 +157,8 @@ if __name__ == "__main__":
     train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
     test_dataloader =  DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
 
-    model = DepthPosePredictor()
+    # model = DepthPosePredictor()
+    model = UNet(n_channels=1, n_classes=1)
     trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size)
     trainer.train()
     trainer.eval()

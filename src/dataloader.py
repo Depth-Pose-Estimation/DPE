@@ -78,7 +78,7 @@ class DepthDatasetKitti(torch.utils.data.Dataset):
         transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
         rgb_image_t = ImageOps.grayscale(Image.open(rgb_image_t_path))
-        depth_image_t = np.load(depth_image_t_path)
+        depth_image_t = np.load(depth_image_t_path).astype(np.float32)
 
         rgb_image_t = transform(rgb_image_t)
         depth_image_t = transform(depth_image_t)
