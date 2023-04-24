@@ -9,13 +9,15 @@ from model import DepthPosePredictor
 from unet.unet_model import UNet
 import matplotlib.pyplot as plt
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
-# torch.manual_seed(6)
+writer = SummaryWriter()
 
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 1e-3, batch_size = 100, 
                     num_epochs = 10, scheduler = None, device = 'cuda'):
-      
+
+        print(f"[INFO] Training for {num_epochs} epochs")
         self.model = model
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
@@ -23,6 +25,7 @@ class Trainer:
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.device = device
+        self.val_every = 5
 
         self.optim = torch.optim.Adam(self.model.parameters(), self.learning_rate)
         self.scheduler = scheduler
@@ -83,15 +86,21 @@ class Trainer:
                 loss.backward()
                 self.optim.step()
                 train_loss += loss.item()
+
+            if i % self.val_every == 0:
+                self.eval(i)
+
+            train_loss /= len(self.train_dataloader)
             
             print(f"EPOCH {i + 1} [TRAIN LOSS] {train_loss}")
+            writer.add_scalar('Loss/train', train_loss, i)
 
             if self.scheduler is not None:
                 self.scheduler.step()
 
         return train_loss
     
-    def eval(self):
+    def eval(self,i = None):
         val_loss = 0
         self.model.eval()
 
@@ -104,15 +113,19 @@ class Trainer:
 
                 loss = self.loss(depth_out, depth_imgs_gt)
                 val_loss += loss.item()
+            val_loss /= len(self.test_dataloader)
 
             print(f"[VAL LOSS] {val_loss}")
+            writer.add_scalar('Loss/val', val_loss, i)
+
+            torch.save(model.state_dict(), "best.pth")
 
         images, depth = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()
 
-        self.visualise_output(images, self.model)
+        self.visualise_output(images, self.model, i)
 
         self.model.train()
         
@@ -134,7 +147,7 @@ class Trainer:
         plt.imsave("gt_depth.png", np.transpose(npdepth, (1, 2, 0)))
 
 
-    def visualise_output(self, images, model):
+    def visualise_output(self, images, model, i = None):
 
         with torch.no_grad():
         
@@ -144,6 +157,9 @@ class Trainer:
             # images /= torch.max(images)
             # images = self.to_img(images)
             np_imagegrid = torchvision.utils.make_grid(images[1:10], 10, 1).numpy()
+            if i == None: idx = 0 
+            else: idx = i
+            writer.add_image('Predicted Depth', np_imagegrid, idx)
             print(f"[INFO] Saving pred plot")
             np_imagegrid /= np.max(np_imagegrid)
             plt.imsave("pred_depth.png", np.transpose(np_imagegrid, (1, 2, 0)))
@@ -154,6 +170,7 @@ if __name__ == "__main__":
     # dataset directory
     parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
     parser.add_argument('--batch-size', type=int, help='batch size', default=10)
+    parser.add_argument('--epoch', type=int, help='epoch', default=200)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -180,6 +197,6 @@ if __name__ == "__main__":
 
     # model = DepthPosePredictor()
     model = UNet(n_channels=1, n_classes=1)
-    trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size)
+    trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size, num_epochs= args.epoch)
     trainer.train()
     trainer.eval()
