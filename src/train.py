@@ -14,7 +14,7 @@ import numpy as np
 
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, learning_rate = 1e-3, batch_size = 100, 
-                    num_epochs = 1, scheduler = None, device = 'cuda'):
+                    num_epochs = 10, scheduler = None, device = 'cuda'):
       
         self.model = model
         self.train_dataloader = train_dataloader
@@ -43,6 +43,26 @@ class Trainer:
         loss = smooth(depth_img, rgb_img)
         return loss
     
+    def smooth_loss(self, pred_map):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
+
+        if type(pred_map) not in [tuple, list]:
+            pred_map = [pred_map]
+
+        loss = 0
+        weight = 1.
+
+        for scaled_map in pred_map:
+            dx, dy = gradient(scaled_map)
+            dx2, dxdy = gradient(dx)
+            dydx, dy2 = gradient(dy)
+            loss += (dx2.abs().mean() + dxdy.abs().mean() + dydx.abs().mean() + dy2.abs().mean())*weight
+            weight /= 2.3  # don't ask me why it works better
+        return loss
+
     def train(self):
 
 
@@ -56,7 +76,8 @@ class Trainer:
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                loss = mse_loss #+ depth_loss
+                # smooth_loss = self.smooth_loss(depth_out)
+                loss = depth_loss + mse_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
