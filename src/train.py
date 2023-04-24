@@ -134,7 +134,7 @@ class Trainer:
                 pose_out = model_out[:, -12:]
 
                 loss = self.loss(depth_out, depth_imgs_gt)
-                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)s
+                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
                 val_loss += (loss.item() + reproj_loss.item())
             val_loss /= len(self.test_dataloader)
 
