@@ -42,6 +42,51 @@ class DepthDataset(torch.utils.data.Dataset):
 
         return rgb_img_t, rgb_img_t1, depth_img
     
+class DepthDatasetKitti(torch.utils.data.Dataset):
+    def __init__(self, split = "train", data_dir = None):
+        super (DepthDatasetKitti, self).__init__()
+
+        self.split_type = split
+        self.data_dir = data_dir
+
+        if self.split_type == "train":
+            self.txt_file = "train.txt"
+
+        elif self.split_type == "val":
+            self.txt_file = "val.txt"
+        
+        f = open(os.path.join(data_dir, self.txt_file))
+        self.folders = f
+        
+        self.all_files = []
+        self.all_folders = []
+        for folders in self.folders:
+            files_in_folders = os.listdir(os.path.join(data_dir, folders.strip("\n")))
+            for f in files_in_folders:
+                if (".jpg") in f:
+                    self.all_files.append(os.path.join(folders.strip("\n"), f))
+
+        #TODO : Handle poses
+
+    def __len__(self):
+        return len(self.all_files)
+    
+    def __getitem__(self, idx):
+        rgb_image_t_path = os.path.join(self.data_dir, self.all_files[idx])
+        depth_image_t_path = rgb_image_t_path.strip(".jpg") + "_depth_interp.npy"
+
+        transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+
+        rgb_image_t = ImageOps.grayscale(Image.open(rgb_image_t_path))
+        depth_image_t = np.load(depth_image_t_path)
+
+        rgb_image_t = transform(rgb_image_t)
+        depth_image_t = transform(depth_image_t)
+
+        return rgb_image_t, depth_image_t
+
+
+    
 ###################### TESTER CODE ##############################################
 
 # dataset = DepthDataset(rgb_img_txt= "/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360/rgb.txt",
@@ -56,3 +101,13 @@ class DepthDataset(torch.utils.data.Dataset):
 #     print(depth.shape)
 #     break
     # print(i)
+
+# dataset = DepthDatasetKitti(split="train", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
+
+# print(len(dataset))
+# for i, (rgb_t, depth) in enumerate(dataset):
+#     print(rgb_t.shape)
+#     # print(rgb_t1.shape)
+#     print(depth.shape)
+#     break
+#     print(i)

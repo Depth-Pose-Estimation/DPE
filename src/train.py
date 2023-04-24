@@ -4,7 +4,7 @@ import torchgeometry as tgm
 import argparse
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
-from dataloader import DepthDataset
+from dataloader import DepthDataset, DepthDatasetKitti
 from model import DepthPosePredictor
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,9 +28,12 @@ class Trainer:
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
-        # loss_fn = torch.nn.CrossEntropyLoss()
-        mask = (depth_imgs_gt != 0)
-        loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
+        loss_fn = torch.nn.CrossEntropyLoss()
+        loss_val = loss_fn(model_out, depth_imgs_gt)
+
+        # mask = (depth_imgs_gt != 0)
+        # loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
+
         return loss_val
     
     def depth_smoothness_loss(self, depth_img, rgb_img):
@@ -45,15 +48,14 @@ class Trainer:
         self.model.to(self.device)
         for i in range(self.num_epochs):
             train_loss = 0
-            for rgb_imgs_t, rgb_imgs_t1, depth_imgs_gt in self.train_dataloader:
+            for rgb_imgs_t, depth_imgs_gt in self.train_dataloader:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
-                rgb_imgs_t1 = rgb_imgs_t1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
-                depth_out, pose_out = self.model(xt_1 = rgb_imgs_t1) #, xt = rgb_imgs_t)
+                depth_out = self.model(rgb_imgs_t) #, xt = rgb_imgs_t)
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                loss = mse_loss #+ depth_loss
+                loss = mse_loss + depth_loss
                 
                 self.optim.zero_grad()
                 loss.backward()
@@ -126,7 +128,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset directory
     parser.add_argument('--data-dir', type=str, help='path to dataset directory', default="/home/arjun/Desktop/spring23/vlr/project/DPE/data/rgbd_dataset_freiburg2_pioneer_360")
-    parser.add_argument('--batch-size', type=str, help='batch size', default=3)
+    parser.add_argument('--batch-size', type=int, help='batch size', default=6)
 
     args = parser.parse_args()
     dataset_dir = args.data_dir
@@ -138,13 +140,16 @@ if __name__ == "__main__":
     depth_dir = dataset_dir
 
     # load dataset
-    dataset = DepthDataset(rgb_img_txt=rgb_txt, depth_img_txt=depth_txt, rgb_img_dir=rgb_dir, depth_img_dir=depth_dir)
+    # dataset = DepthDatasetKitti(rgb_img_txt=rgb_txt, depth_img_txt=depth_txt, rgb_img_dir=rgb_dir, depth_img_dir=depth_dir)
     # train-test split
-    dataset_len = dataset.__len__()
-    test_split = int(0.2 * dataset_len)
-    lengths = [(dataset_len - test_split), test_split ] # [train ratio, test ratio]
-    train_dataset, test_dataset = random_split(dataset, lengths)
+    # dataset_len = dataset.__len__()
+    # test_split = int(0.2 * dataset_len)
+    # lengths = [(dataset_len - test_split), test_split ] # [train ratio, test ratio]
+    # train_dataset, test_dataset = random_split(dataset, lengths)
 
+
+    train_dataset = DepthDatasetKitti(split="train", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
+    test_dataset = DepthDatasetKitti(split="val", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
     train_dataloader =  DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
     test_dataloader =  DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
 
