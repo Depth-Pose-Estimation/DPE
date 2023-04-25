@@ -166,8 +166,8 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         rgb_image_t = transform(rgb_image_t)
         rgb_image_t1 = transform(rgb_image_t1)
         depth_image_t = transform(depth_image_t)
-        pose = torch.tensor(pose)
-        cam_intrinsic = torch.tensor(cam_intrinsic, dtype = torch.float)
+        pose = torch.tensor(pose, dtype=torch.float)
+        cam_intrinsic = torch.tensor(cam_intrinsic, dtype=torch.float)
 
         return rgb_image_t, rgb_image_t1, depth_image_t, pose, cam_intrinsic
     

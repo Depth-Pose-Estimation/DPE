@@ -30,14 +30,6 @@ class Trainer:
 
         self.optim = torch.optim.Adam(self.model.parameters(), self.learning_rate)
         self.scheduler = scheduler
-
-        # fx = 520.9  # focal length x
-        # fy = 521.0  # focal length y
-        # cx = 325.1  # optical center x
-        # cy = 249.7  # optical center y
-        # self.intrinsic_mat = torch.tensor([[fx, 0, cx],
-        #                                    [0, fy, cy],
-        #                                    [0, 0, 1]], dtype=torch.float, device=device)
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
@@ -49,9 +41,22 @@ class Trainer:
     def reproj_loss(self, source_imgs, target_imgs, pose_out, depth_out, intrinsics):
         warped_imgs, valid_pts = inverse_warp(source_imgs, pose_out, depth_out, intrinsics)
         reproj_loss = (target_imgs - warped_imgs) * valid_pts.unsqueeze(1).float()
-        reproj_loss = reproj_loss.abs().mean()
+        reproj_loss = reproj_loss.abs().mean(dim=(-2, -1))
+        # average over batch later - so sum now
+        reproj_loss = reproj_loss.sum()
         return reproj_loss
     
+    def pose_loss(self, pose_gt, pose_out):
+        R_gt, trans_gt = pose_gt[:, :, :-1], pose_gt[:, :, -1]
+        trans_out, quat_out = pose_out[:, :3], pose_out[:, 3:]
+        R_out = quat_to_rotMat(quat_out)
+        R_out_T_R_gt = torch.transpose(R_out, dim0=1, dim1=2) @ R_gt
+        R_norm = torch.linalg.norm((R_out_T_R_gt - torch.eye(3, device=pose_gt.device).unsqueeze(0)), dim=(-2, -1))
+        trans_norm = torch.linalg.norm((trans_gt - trans_out), dim=-1)
+        # average over batch later - so sum now
+        loss = R_norm.abs().sum() + trans_norm.abs().sum()
+        return loss
+
     def depth_smoothness_loss(self, depth_img, rgb_img):
         smooth = tgm.losses.InverseDepthSmoothnessLoss()
         loss = smooth(depth_img, rgb_img)
@@ -68,6 +73,7 @@ class Trainer:
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 intrinsics = intrinsics.to(self.device)
+                pose_gt = pose_gt.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
@@ -77,10 +83,12 @@ class Trainer:
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
                 reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t,
                                                target_imgs=rgb_imgs_tPlus1,
-                                               pose_out=pose_out, depth_out=depth_out,
+                                               pose_out=pose_out,
+                                               depth_out=depth_out,
                                                intrinsics=intrinsics)
+                pose_loss = self.pose_loss(pose_gt, pose_out)
 
-                loss = reproj_loss #+ depth_loss + mse_loss
+                loss = reproj_loss + pose_loss + depth_loss + mse_loss
 
                 self.optim.zero_grad()
                 loss.backward()
@@ -112,18 +120,22 @@ class Trainer:
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 intrinsics = intrinsics.to(self.device)
+                pose_gt = pose_gt.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
                 pose_out = model_out[:, -7:]
 
-                loss = self.loss(depth_out, depth_imgs_gt)
+                mse_loss = self.loss(depth_out, depth_imgs_gt)
+                depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
                 reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t,
                                                target_imgs=rgb_imgs_tPlus1,
                                                pose_out=pose_out,
                                                depth_out=depth_out,
                                                intrinsics=intrinsics)
-                val_loss += (loss.item() + reproj_loss.item())
+                pose_loss = self.pose_loss(pose_gt, pose_out)
+
+                val_loss += (reproj_loss.item() + pose_loss.item() + depth_loss.item() + mse_loss.item())
 
             val_loss /= len(self.test_dataloader)
 
