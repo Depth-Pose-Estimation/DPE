@@ -93,8 +93,8 @@ class Trainer:
             print(f"EPOCH {i + 1} [TRAIN LOSS] {train_loss}")
             writer.add_scalar('Loss/train', train_loss, i)
 
-            if i % self.val_every == 0:
-                self.eval(i)
+            if (i + 1) % self.val_every == 0:
+                self.eval(i + 1)
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -132,7 +132,7 @@ class Trainer:
 
             torch.save(model.state_dict(), "best.pth")
 
-        images, images_t, depth, pose = iter(self.test_dataloader).next()
+        images, images_t, depth, pose_gt, intrinsics = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()

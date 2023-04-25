@@ -34,7 +34,8 @@ def inverse_warp(imgs, pose, depth, intrinsics):
         y = torch.arange(0, w, dtype= torch.float)
         x_inds, y_inds =  torch.meshgrid(x, y, indexing='ij')
         # homogeneous pixel indices
-        indices = torch.stack((x_inds, y_inds, torch.ones_like(x_inds))).unsqueeze(0) # (1 x 3 x H x W)
+        # indices = torch.stack((x_inds, y_inds, torch.ones_like(x_inds))).unsqueeze(0) # (1 x 3 x H x W)
+        indices = torch.stack((y_inds, x_inds, torch.ones_like(x_inds))).unsqueeze(0) # (1 x 3 x H x W)
 
         # # convert to rot mat and get transformation matrix
         translation, quat = pose[:, :3], pose[:, 3:]
@@ -63,8 +64,10 @@ def inverse_warp(imgs, pose, depth, intrinsics):
 
         warped_pixels = warped_pixels.reshape(b, 2, h, w) # (B x 2 x H x W)
 
-        grid_x = ((2*grid_x) / (h - 1)) - 1
-        grid_y = ((2*grid_y) / (w - 1)) - 1
+        # grid_x = ((2*grid_x) / (h - 1)) - 1
+        # grid_y = ((2*grid_y) / (w - 1)) - 1
+        grid_x = ((2*grid_x) / (w - 1)) - 1
+        grid_y = ((2*grid_y) / (h - 1)) - 1
         grid = torch.stack((grid_x, grid_y), dim=2).reshape(b, h, w, 2) # (B x H x W x 2)
 
         warped_imgs = F.grid_sample(imgs, grid, padding_mode='zeros', align_corners=True)
