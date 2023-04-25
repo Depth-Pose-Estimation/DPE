@@ -5,7 +5,7 @@ import argparse
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from dataloader import DepthDataset, DepthDatasetKitti, DepthPoseDatasetKitti
-from model import DepthPosePredictor
+# from model import DepthPosePredictor
 from unet.unet_model import UNet
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,17 +44,22 @@ class Trainer:
         reproj_loss = reproj_loss.abs().mean(dim=(-2, -1))
         # average over batch later - so sum now
         reproj_loss = reproj_loss.sum()
+
         return reproj_loss
     
     def pose_loss(self, pose_gt, pose_out):
+
         R_gt, trans_gt = pose_gt[:, :, :-1], pose_gt[:, :, -1]
         trans_out, quat_out = pose_out[:, :3], pose_out[:, 3:]
         R_out = quat_to_rotMat(quat_out)
         R_out_T_R_gt = torch.transpose(R_out, dim0=1, dim1=2) @ R_gt
+
         R_norm = torch.linalg.norm((R_out_T_R_gt - torch.eye(3, device=pose_gt.device).unsqueeze(0)), dim=(-2, -1))
         trans_norm = torch.linalg.norm((trans_gt - trans_out), dim=-1)
+
         # average over batch later - so sum now
         loss = R_norm.abs().sum() + trans_norm.abs().sum()
+
         return loss
 
     def depth_smoothness_loss(self, depth_img, rgb_img):
@@ -68,12 +73,15 @@ class Trainer:
         for i in range(self.num_epochs):
             train_loss = 0
             for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt, intrinsics in self.train_dataloader:
+
                 b, c, h, w = rgb_imgs_t.shape
+
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 intrinsics = intrinsics.to(self.device)
                 pose_gt = pose_gt.to(self.device)
+
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
@@ -115,12 +123,15 @@ class Trainer:
 
         with torch.no_grad():
             for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt, intrinsics in self.test_dataloader:
+
                 b, c, h, w = rgb_imgs_t.shape
+
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
                 intrinsics = intrinsics.to(self.device)
                 pose_gt = pose_gt.to(self.device)
+
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
@@ -144,12 +155,12 @@ class Trainer:
 
             torch.save(model.state_dict(), "best.pth")
 
-        images, images_t, depth, pose_gt, intrinsics = iter(self.test_dataloader).next()
+        images, images_t1, depth, pose_gt, intrinsics = iter(self.test_dataloader).next()
         self.show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.make_grid(depth[1:10],10,1))
         # plt.show()
         # plt.figure()
 
-        self.visualise_output(self.model, images, images_t, i)
+        self.visualise_output(self.model, images, images_t1, i)
 
         self.model.train()
 
@@ -171,23 +182,33 @@ class Trainer:
         plt.imsave("gt_depth.png", np.transpose(npdepth, (1, 2, 0)))
 
 
-    def visualise_output(self, model, images, images_t, i = None):
+    def visualise_output(self, model, images, images_t1, i = None):
 
         with torch.no_grad():
 
             images = images.to(self.device)
-            predicted = model(images, images_t)
+            images_t1 = images_t1.to(self.device)
+
+            predicted = model(images, images_t1)
             predicted = predicted.cpu()
+
             pred_depth = predicted[:, :-7]
             pred_pose = predicted[:, -7:]
 
+            trans_out, quat_out = pred_pose[:, :3], pred_pose[:, 3:]
+            R_out = quat_to_rotMat(quat_out)
+            pred_pose = torch.cat((R_out, trans_out.unsqueeze(-1)), dim=-1) # (B x 3 x 4)
+
             pred_depth = pred_depth.view(images.shape)
             np_imagegrid = torchvision.utils.make_grid(pred_depth[1:10], 10, 1).numpy()
-            if i == None: idx = 0 
-            else: idx = i
+            # if i == None: idx = 0
+            # else: idx = i
             print(f"[INFO] Saving pred plot")
             np_imagegrid /= np.max(np_imagegrid)
             plt.imsave("pred_depth.png", np.transpose(np_imagegrid, (1, 2, 0)))
+
+            #TODO: Log pred_pose in a .txt for comparison
+
             # plt.show()
 
 if __name__ == "__main__":
