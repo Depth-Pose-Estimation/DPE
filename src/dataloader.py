@@ -108,28 +108,36 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         
         self.all_files = []
         self.all_poses = []
+        self.all_cams = []
         self.all_folders = []
-        self.num_files_idx = []
+        self.num_files_idx = [-1]
         for folders in self.folders:
             files_in_folders = os.listdir(os.path.join(data_dir, folders.strip("\n")))
-            self.num_files_idx.append(len(files_in_folders))
+            self.num_files_idx.append(self.num_files_idx[-1] + len(files_in_folders))
+
             for f in files_in_folders:
                 if (".jpg") in f:
                     self.all_files.append(os.path.join(folders.strip("\n"), f))
                 #TODO : Handle poses
-                if f == "poses.txt":
+                elif f == "poses.txt":
                     p = open(os.path.join(data_dir, folders.strip("\n"), f))
                     self.all_poses.extend(p.readlines())
-
-
-    def __len__(self):
-        return len(self.all_files) - 1
-    
+                elif f == "cam.txt":
+                    p = open(os.path.join(data_dir, folders.strip("\n"), f))
+                    camRead = p.readlines()
+                    cam = []
+                    for line in camRead:
+                        row = line.strip("\n")
+                        row = row.split(" ")
+                        cam.extend(row)
+                    cam = np.array([float(x) for x in cam]).reshape(3, 3)
+                    cam = list(cam) * len(files_in_folders)
+                    self.all_cams.extend(cam)
     def __getitem__(self, idx):
 
         # Take care of indices that are the end of one folder
         if idx in self.num_files_idx:
-            idx += 1
+            idx -= 1
         
         rgb_image_t_path = os.path.join(self.data_dir, self.all_files[idx])
         rgb_image_t1_path = os.path.join(self.data_dir, self.all_files[idx + 1])
@@ -145,14 +153,17 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         pose = np.array(pose)  # (12, )
         pose = np.reshape(pose, (3, 4))
 
+        cam_intrinsic = self.all_cams[idx]
+
         transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
         rgb_image_t = transform(rgb_image_t)
         rgb_image_t1 = transform(rgb_image_t1)
         depth_image_t = transform(depth_image_t)
         pose = torch.tensor(pose)
+        cam_intrinsic = torch.tensor(cam_intrinsic)
 
-        return rgb_image_t, rgb_image_t1, depth_image_t, pose
+        return rgb_image_t, rgb_image_t1, depth_image_t, pose, cam_intrinsic
     
 ###################### TESTER CODE ##############################################
 

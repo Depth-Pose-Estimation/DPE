@@ -31,26 +31,23 @@ class Trainer:
         self.optim = torch.optim.Adam(self.model.parameters(), self.learning_rate)
         self.scheduler = scheduler
 
-        fx = 520.9  # focal length x
-        fy = 521.0  # focal length y
-        cx = 325.1  # optical center x
-        cy = 249.7  # optical center y
-        self.intrinsic_mat = torch.tensor([[fx, 0, cx],
-                                           [0, fy, cy],
-                                           [0, 0, 1]], dtype=torch.float, device=device)
+        # fx = 520.9  # focal length x
+        # fy = 521.0  # focal length y
+        # cx = 325.1  # optical center x
+        # cy = 249.7  # optical center y
+        # self.intrinsic_mat = torch.tensor([[fx, 0, cx],
+        #                                    [0, fy, cy],
+        #                                    [0, 0, 1]], dtype=torch.float, device=device)
     
     def loss(self, model_out, depth_imgs_gt):
         loss_fn = torch.nn.MSELoss()
-        # loss_fn = torch.nn.CrossEntropyLoss()
         loss_val = loss_fn(model_out, depth_imgs_gt)
-
         # mask = (depth_imgs_gt != 0)
         # loss_val = loss_fn(model_out[mask], depth_imgs_gt[mask])
-
         return loss_val
     
-    def reproj_loss(self, source_imgs, target_imgs, pose_out, depth_out):
-        warped_imgs, valid_pts = inverse_warp(source_imgs, pose_out, depth_out, self.intrinsic_mat)
+    def reproj_loss(self, source_imgs, target_imgs, pose_out, depth_out, intrinsics):
+        warped_imgs, valid_pts = inverse_warp(source_imgs, pose_out, depth_out, intrinsics)
         reproj_loss = (target_imgs - warped_imgs) * valid_pts.unsqueeze(1).float()
         reproj_loss = reproj_loss.abs().mean()
         return reproj_loss
@@ -59,33 +56,13 @@ class Trainer:
         smooth = tgm.losses.InverseDepthSmoothnessLoss()
         loss = smooth(depth_img, rgb_img)
         return loss
-    
-    def smooth_loss(self, pred_map):
-        def gradient(pred):
-            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
-            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
-            return D_dx, D_dy
-
-        if type(pred_map) not in [tuple, list]:
-            pred_map = [pred_map]
-
-        loss = 0
-        weight = 1.
-
-        for scaled_map in pred_map:
-            dx, dy = gradient(scaled_map)
-            dx2, dxdy = gradient(dx)
-            dydx, dy2 = gradient(dy)
-            loss += (dx2.abs().mean() + dxdy.abs().mean() + dydx.abs().mean() + dy2.abs().mean())*weight
-            weight /= 2.3  # don't ask me why it works better
-        return loss
 
     def train(self):
 
         self.model.to(self.device)
         for i in range(self.num_epochs):
             train_loss = 0
-            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose in self.train_dataloader:
+            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt, intrinsics in self.train_dataloader:
                 b, c, h, w = rgb_imgs_t.shape
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
@@ -97,9 +74,13 @@ class Trainer:
 
                 mse_loss = self.loss(depth_out, depth_imgs_gt)
                 depth_loss = self.depth_smoothness_loss(depth_out, rgb_imgs_t)
-                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
-                loss = reproj_loss #+ depth_loss + mse_loss
-                
+                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t,
+                                               target_imgs=rgb_imgs_tPlus1,
+                                               pose_out=pose_out, depth_out=depth_out,
+                                               intrinsics=intrinsics)
+
+                loss = reproj_loss + depth_loss + mse_loss
+
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -107,7 +88,7 @@ class Trainer:
 
 
             train_loss /= len(self.train_dataloader)
-            
+
             print(f"EPOCH {i + 1} [TRAIN LOSS] {train_loss}")
             writer.add_scalar('Loss/train', train_loss, i)
 
@@ -124,7 +105,7 @@ class Trainer:
         self.model.eval()
 
         with torch.no_grad():
-            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt in self.test_dataloader:
+            for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt, intrinsics in self.test_dataloader:
                 b, c, h, w = rgb_imgs_t.shape
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
@@ -135,8 +116,13 @@ class Trainer:
                 pose_out = model_out[:, -7:]
 
                 loss = self.loss(depth_out, depth_imgs_gt)
-                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
+                reproj_loss = self.reproj_loss(source_imgs=rgb_imgs_t,
+                                               target_imgs=rgb_imgs_tPlus1,
+                                               pose_out=pose_out,
+                                               depth_out=depth_out,
+                                               intrinsics=intrinsics)
                 val_loss += (loss.item() + reproj_loss.item())
+
             val_loss /= len(self.test_dataloader)
 
             print(f"[VAL LOSS] {val_loss}")
@@ -152,9 +138,9 @@ class Trainer:
         self.visualise_output(self.model, images, images_t, i)
 
         self.model.train()
-        
+
         return val_loss
-    
+
     def to_img(self, x):
         x = x.clamp(0, 1)
         return x
@@ -174,7 +160,7 @@ class Trainer:
     def visualise_output(self, model, images, images_t, i = None):
 
         with torch.no_grad():
-        
+
             images = images.to(self.device)
             predicted = model(images, images_t)
             predicted = predicted.cpu()
