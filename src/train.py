@@ -67,6 +67,7 @@ class Trainer:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
+                intrinsics = intrinsics.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)
@@ -79,7 +80,7 @@ class Trainer:
                                                pose_out=pose_out, depth_out=depth_out,
                                                intrinsics=intrinsics)
 
-                loss = reproj_loss + depth_loss + mse_loss
+                loss = reproj_loss #+ depth_loss + mse_loss
 
                 self.optim.zero_grad()
                 loss.backward()
@@ -110,6 +111,7 @@ class Trainer:
                 rgb_imgs_t = rgb_imgs_t.to(self.device)
                 rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(self.device)
                 depth_imgs_gt = depth_imgs_gt.to(self.device)
+                intrinsics = intrinsics.to(self.device)
                 model_out = self.model(xt=rgb_imgs_t, xt1 = rgb_imgs_tPlus1)
                 depth_out = model_out[:, :-7]
                 depth_out = depth_out.reshape(b, c, h, w)

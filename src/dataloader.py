@@ -98,7 +98,7 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         self.data_dir = data_dir
 
         if self.split_type == "train":
-            self.txt_file = "train.txt"
+            self.txt_file = "1.txt"
 
         elif self.split_type == "val":
             self.txt_file = "val.txt"
@@ -131,8 +131,13 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
                         row = row.split(" ")
                         cam.extend(row)
                     cam = np.array([float(x) for x in cam]).reshape(3, 3)
-                    cam = list(cam) * len(files_in_folders)
+                    camList = [cam]
+                    cam = camList * len(files_in_folders)
                     self.all_cams.extend(cam)
+
+    def __len__(self):
+        return len(self.all_files) - 1
+    
     def __getitem__(self, idx):
 
         # Take care of indices that are the end of one folder
@@ -153,6 +158,7 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         pose = np.array(pose)  # (12, )
         pose = np.reshape(pose, (3, 4))
 
+
         cam_intrinsic = self.all_cams[idx]
 
         transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
@@ -161,7 +167,7 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         rgb_image_t1 = transform(rgb_image_t1)
         depth_image_t = transform(depth_image_t)
         pose = torch.tensor(pose)
-        cam_intrinsic = torch.tensor(cam_intrinsic)
+        cam_intrinsic = torch.tensor(cam_intrinsic, dtype = torch.float)
 
         return rgb_image_t, rgb_image_t1, depth_image_t, pose, cam_intrinsic
     

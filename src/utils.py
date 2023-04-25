@@ -44,9 +44,9 @@ def inverse_warp(imgs, pose, depth, intrinsics):
         # transform_mat = pose.reshape(b, 3, 4) # (B x 3 x 4)
 
         # convert to 3D coords
-        intrinsics_inv = torch.linalg.inv(intrinsics).unsqueeze(0) # (1 x 3 x 3)
+        intrinsics_inv = torch.linalg.inv(intrinsics) # (1 x 3 x 3)
         indices = indices.flatten(start_dim=-2).to(intrinsics.device) # (1 x 3 x H*W)
-        cam_coords = (intrinsics_inv @ indices).reshape(1, 3, h, w).repeat(b, 1, 1, 1) # (B x 3 x H x W)
+        cam_coords = (intrinsics_inv @ indices).reshape(b, 3, h, w) # (B x 3 x H x W)
         # multiply with depth
         depth_cam_coords = cam_coords * depth # (B x 3 x H x W)
         # homogenize
@@ -54,7 +54,7 @@ def inverse_warp(imgs, pose, depth, intrinsics):
         depth_cam_coords_homo = depth_cam_coords_homo.flatten(start_dim=-2) # (B x 4 x H*W)
 
         # warp to source frame
-        proj_tgt_to_src = intrinsics.unsqueeze(0) @ transform_mat # (B x 3 x 4)
+        proj_tgt_to_src = intrinsics @ transform_mat # (B x 3 x 4)
         warped_pixels = proj_tgt_to_src @ depth_cam_coords_homo # (B x 3 x H*W)
         # normalize and un-homo
         warped_pixels = warped_pixels[:, :-1, :] / warped_pixels[:, -1, :].clamp(min=1e-3).unsqueeze(1) # (B x 2 x H*W)
