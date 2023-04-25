@@ -36,13 +36,13 @@ def visualise_output(model,images, images_t = None,  i = None):
 
     with torch.no_grad():
         images = images.to(device)
-        predicted = model(images, images)
+        predicted = model(images, images_t)
         predicted = predicted.cpu()
         pred_depth = predicted[:, :-7]
         pred_pose = predicted[:, -7:]
 
         pred_depth = pred_depth.view(images.shape)
-        np_imagegrid = torchvision.utils.make_grid(images[1:10], 10, 1).numpy()
+        np_imagegrid = torchvision.utils.make_grid(pred_depth[1:10], 10, 1).numpy()
         if i == None: idx = 0 
         else: idx = i
         print(f"[INFO] Saving pred plot")

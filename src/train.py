@@ -149,7 +149,7 @@ class Trainer:
         # plt.show()
         # plt.figure()
 
-        self.visualise_output(images, self.model, i)
+        self.visualise_output(self.model, images, images_t, i)
 
         self.model.train()
         
@@ -171,19 +171,20 @@ class Trainer:
         plt.imsave("gt_depth.png", np.transpose(npdepth, (1, 2, 0)))
 
 
-    def visualise_output(self, images, model, i = None):
+    def visualise_output(self, model, images, images_t, i = None):
 
         with torch.no_grad():
         
             images = images.to(self.device)
-            images = model(images)
-            images = images.cpu()
-            # images /= torch.max(images)
-            # images = self.to_img(images)
-            np_imagegrid = torchvision.utils.make_grid(images[1:10], 10, 1).numpy()
+            predicted = model(images, images_t)
+            predicted = predicted.cpu()
+            pred_depth = predicted[:, :-7]
+            pred_pose = predicted[:, -7:]
+
+            pred_depth = pred_depth.view(images.shape)
+            np_imagegrid = torchvision.utils.make_grid(pred_depth[1:10], 10, 1).numpy()
             if i == None: idx = 0 
             else: idx = i
-            writer.add_image('Predicted Depth', np_imagegrid, idx)
             print(f"[INFO] Saving pred plot")
             np_imagegrid /= np.max(np_imagegrid)
             plt.imsave("pred_depth.png", np.transpose(np_imagegrid, (1, 2, 0)))
@@ -221,6 +222,7 @@ if __name__ == "__main__":
 
     # model = DepthPosePredictor()
     model = UNet(n_channels=1, n_classes=1)
+    model = torch.nn.DataParallel(model)
     trainer = Trainer(model, train_dataloader, test_dataloader, batch_size=batch_size, num_epochs= args.epoch)
     trainer.train()
     trainer.eval()
