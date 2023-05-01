@@ -158,6 +158,14 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         pose = np.array(pose)  # (12, )
         pose = np.reshape(pose, (3, 4))
 
+        # transform current pose wrt previous pose to get relative pose
+        prev_pose = self.all_poses[idx].split(" ")
+        prev_pose[-1] = prev_pose[-1].strip("\n")
+        prev_pose = [float(x) for x in prev_pose]
+        prev_pose = np.array(prev_pose)  # (12, )
+        prev_pose = np.reshape(prev_pose, (3, 4))
+
+        pose = self.relative_transformation(prev_pose, pose)
 
         cam_intrinsic = self.all_cams[idx]
 
@@ -170,6 +178,20 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
         cam_intrinsic = torch.tensor(cam_intrinsic, dtype=torch.float)
 
         return rgb_image_t, rgb_image_t1, depth_image_t, pose, cam_intrinsic
+
+    def relative_transformation(pose1, pose2):
+
+        H1 = np.identity(4)
+        H1[:3, :3] = pose1[:, 0:3]
+        H1[:3, -1] = pose1[:, -1].reshape(3)
+
+        H2 = np.identity(4)
+        H2[:3, :3] = pose2[:, 0:3]
+        H2[:3, -1] = pose2[:, -1].reshape(3)
+
+        rel_pose = np.linalg.inv(H1) @ H2
+
+        return rel_pose
     
 ###################### TESTER CODE ##############################################
 
