@@ -179,7 +179,7 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
 
         return rgb_image_t, rgb_image_t1, depth_image_t, pose, cam_intrinsic
 
-    def relative_transformation(pose1, pose2):
+    def relative_transformation(self, pose1, pose2):
 
         H1 = np.identity(4)
         H1[:3, :3] = pose1[:, 0:3]
@@ -191,7 +191,7 @@ class DepthPoseDatasetKitti(torch.utils.data.Dataset):
 
         rel_pose = np.linalg.inv(H1) @ H2
 
-        return rel_pose
+        return rel_pose[:-1, : ]
     
 ###################### TESTER CODE ##############################################
 
