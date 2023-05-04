@@ -14,7 +14,7 @@ model = torch.nn.DataParallel(model) # did this since server trained on all GPUs
 test_dataset = DepthPoseDatasetKitti(split = "val", data_dir = "/home/arjun/Desktop/vlr_project/data/dump")
 test_dataloader =  torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=10, pin_memory=True)
 
-checkpoint = torch.load("src/best_server_combined.pth")
+checkpoint = torch.load("best_server_combined.pth")
 model.load_state_dict(checkpoint)
 
 val_loss = 0
@@ -65,8 +65,9 @@ def reproj_loss(source_imgs, target_imgs, pose_out, depth_out):
     reproj_loss = reproj_loss.abs().mean()
     return reproj_loss
 
+f = open("pred_poses.txt", 'a')
 with torch.no_grad():
-    for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt in test_dataloader:
+    for rgb_imgs_t, rgb_imgs_tPlus1, depth_imgs_gt, pose_gt, cam_intrinsics in test_dataloader:
         b, c, h, w = rgb_imgs_t.shape
         rgb_imgs_t = rgb_imgs_t.to(device)
         rgb_imgs_tPlus1 = rgb_imgs_tPlus1.to(device)
@@ -76,6 +77,7 @@ with torch.no_grad():
         depth_out = depth_out.reshape(b, c, h, w)
         pose_out = model_out[:, -7:]
 
+        np.savetxt(f, pose_out.detach().cpu().numpy())
         loss = loss_mse(depth_out, depth_imgs_gt)
         #reproj_loss = reproj_loss(source_imgs=rgb_imgs_t, target_imgs=rgb_imgs_tPlus1, pose_out=pose_out, depth_out=depth_out)
         val_loss += (loss.item())# + reproj_loss.item())
@@ -90,5 +92,3 @@ show_image(torchvision.utils.make_grid(images[1:10],10,1), torchvision.utils.mak
 # plt.figure()
 
 visualise_output(model, images, images_t)
-
-model.train()
